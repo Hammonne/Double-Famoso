@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FACE_SEARCH.EXE</title>
+  <meta name="description" content="Lab 11 de Base de Datos II: búsqueda kNN de rostros con pgvector, IVFFlat y HNSW, en versión pixel.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8' shape-rendering='crispEdges'%3E%3Cpath fill='%23ff6fb5' d='M1 1h2v1H1zM5 1h2v1H5zM0 2h4v1H0zM4 2h4v1H4zM0 3h8v2H0zM1 5h6v1H1zM2 6h4v1H2zM3 7h2v1H3z'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ░░ Paisaje pixel de fondo ░░ -->
+<div class="scenery" aria-hidden="true">
+  <svg class="scenery-svg" viewBox="0 0 320 180" preserveAspectRatio="xMidYMax slice" shape-rendering="crispEdges">
+    <rect width="320" height="180" fill="var(--sky-1)"/>
+    <rect y="40" width="320" height="40" fill="var(--sky-2)"/>
+    <rect y="80" width="320" height="30" fill="var(--sky-3)"/>
+    <g class="clouds" fill="var(--cloud)">
+      <path d="M20 30h30v-4h10v-4h16v4h8v4h10v6H20z"/>
+      <path d="M140 52h20v-4h12v-6h18v6h10v4h14v6h-74z"/>
+      <path d="M232 26h22v-4h14v-4h16v4h8v4h12v6h-72z"/>
+      <path d="M60 70h18v-4h14v4h10v4H60z" opacity=".8"/>
+    </g>
+    <g fill="var(--mtn-far)">
+      <path d="M0 120V108h8v-4h8v-6h8v-6h8v-6h6v-6h8v6h6v6h8v6h8v6h10v8h10v4h6v8z"/>
+      <path d="M150 120v-8h10v-6h10v-8h8v-8h8v-6h8v-6h6v6h8v8h6v6h10v8h10v8h12v6z"/>
+      <path d="M240 120v-6h8v-6h10v-8h8v-8h6v-6h8v6h8v8h8v6h8v6h8v8z"/>
+    </g>
+    <g fill="var(--mtn-near)">
+      <path d="M0 126v-10h12v-6h10v-8h8v-8h8v6h8v6h10v8h12v6h12v6z"/>
+      <path d="M200 126v-8h10v-6h12v-8h8v-6h8v6h10v8h10v6h12v8z"/>
+    </g>
+    <g fill="var(--snow)">
+      <path d="M38 94h8v-6h6v6h-2v2h-4v-2h-2v2h-6z"/>
+      <path d="M190 80h6v-6h6v6h4v4h-4v-2h-4v2h-8z"/>
+      <path d="M270 88h6v-6h6v6h-2v2h-6v-2z"/>
+    </g>
+    <g fill="var(--tree)">
+      <path d="M8 124h4v-6h-2v-4h-2v-4h2v-4h2v-4h2v4h2v4h2v4h-2v4h-2v6h4v4H8z"/>
+      <path d="M22 124h2v-8h-2v-4h2v-4h2v4h2v4h-2v8h2v4h-6z"/>
+      <path d="M288 124h4v-6h-2v-4h-2v-4h2v-4h2v-4h2v4h2v4h2v4h-2v4h-2v6h4v4h-10z"/>
+      <path d="M304 124h2v-8h-2v-4h2v-4h2v4h2v4h-2v8h2v4h-6z"/>
+    </g>
+    <rect y="124" width="320" height="56" fill="var(--grass-1)"/>
+    <rect y="140" width="320" height="40" fill="var(--grass-2)"/>
+    <rect y="160" width="320" height="20" fill="var(--grass-3)"/>
+    <g class="flowers" fill="var(--flower)"></g>
+  </svg>
+</div>
+
+<!-- ░░ Pantalla de carga ░░ -->
+<div id="boot" class="boot" role="dialog" aria-label="Pantalla de inicio">
+  <div class="boot-inner">
+    <div class="loadbar" aria-hidden="true"><div class="loadbar-fill"></div></div>
+    <p class="boot-label">LOADING<span class="blink">...</span></p>
+    <div class="win boot-win">
+      <div class="titlebar"><span class="title">FACE_SEARCH.EXE</span></div>
+      <div class="win-body boot-body">
+        <p class="boot-sub">búsqueda de rostros con</p>
+        <h1 class="logo">pgvector</h1>
+        <p class="boot-sub">IVFFlat · HNSW · kNN</p>
+        <button id="startBtn" class="start-btn" disabled>START</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ░░ Escritorio ░░ -->
+<main id="desktop" class="desktop" hidden>
+  <nav class="icons" aria-label="Programas">
+    <button class="icon" data-open="finder"><span class="ico ico-folder"></span><span>Face<br>Finder</span></button>
+    <button class="icon" data-open="recall"><span class="ico ico-target"></span><span>Recall vs<br>Latencia</span></button>
+    <button class="icon" data-open="scale"><span class="ico ico-pc"></span><span>Escala<br>bilidad</span></button>
+    <button class="icon" data-open="howto"><span class="ico ico-note"></span><span>Cómo<br>funciona</span></button>
+    <button class="icon" data-open="twin"><span class="ico ico-heart"></span><span>Doble<br>famoso</span></button>
+    <button class="icon" data-open="cam"><span class="ico ico-camera"></span><span>Cámara<br>en vivo</span></button>
+    <button class="icon" data-open="upload"><span class="ico ico-upload"></span><span>Subir<br>foto</span></button>
+    <button class="icon" data-open="readme"><span class="ico ico-floppy"></span><span>LEEME<br>.TXT</span></button>
+  </nav>
+
+  <!-- FACE FINDER -->
+  <section class="win" data-win="finder" aria-labelledby="t-finder" hidden>
+    <div class="titlebar"><span class="title" id="t-finder">FACE_FINDER.EXE</span><span class="tb-btns"><button class="tb min" aria-label="Minimizar">_</button><button class="tb close" aria-label="Cerrar">×</button></span></div>
+    <div class="win-body">
+      <div class="toolbar">
+        <label class="field">Consulta
+          <select id="qSel"></select>
+        </label>
+        <fieldset class="seg" id="methodSeg">
+          <legend class="sr">Método</legend>
+          <label><input type="radio" name="method" value="lineal" checked><span>Lineal</span></label>
+          <label><input type="radio" name="method" value="ivf"><span>IVFFlat</span></label>
+          <label><input type="radio" name="method" value="hnsw"><span>HNSW</span></label>
+        </fieldset>
+      </div>
+      <div class="param-row" id="paramRow" hidden>
+        <label for="paramRange" id="paramLabel">probes</label>
+        <input type="range" id="paramRange" min="0" max="4" step="1" value="0">
+        <output id="paramOut" class="chip">1</output>
+      </div>
+      <div class="query-strip">
+        <div class="query-card"><span id="qFace"></span><div><b>Consulta</b><br><span id="qName"></span></div></div>
+        <div class="hud">
+          <div class="hearts" id="hearts" aria-label="recall"></div>
+          <div class="hud-line">recall@10 <b id="recallVal">1.00</b></div>
+          <div class="hud-line">latencia <b id="latVal">—</b> ms</div>
+        </div>
+      </div>
+      <ol class="grid" id="grid"></ol>
+      <div class="lost" id="lostBox" hidden>
+        <p><b>Vecinos exactos que el índice no encontró:</b></p>
+        <ul class="lost-list" id="lostList"></ul>
+      </div>
+      <p class="hint" id="planHint"></p>
+    </div>
+    <div class="statusbar"><span id="finderStatus">Listo</span></div>
+  </section>
+
+  <!-- RECALL VS LATENCIA -->
+  <section class="win" data-win="recall" aria-labelledby="t-recall" hidden>
+    <div class="titlebar"><span class="title" id="t-recall">RECALL_VS_LATENCIA.EXE</span><span class="tb-btns"><button class="tb min" aria-label="Minimizar">_</button><button class="tb close" aria-label="Cerrar">×</button></span></div>
+    <div class="win-body">
+      <canvas id="recallChart" class="chart" width="1120" height="640" role="img" aria-label="Gráfico de recall@10 contra latencia para IVFFlat y HNSW"></canvas>
+      <div class="legend"><span class="sw sw-ivf"></span>IVFFlat (probes) <span class="sw sw-hnsw"></span>HNSW (ef_search) <span class="sw sw-lin"></span>Lineal</div>
+      <table class="tbl" id="sweepTbl"><thead><tr><th>Índice</th><th>Parámetro</th><th>recall@10</th><th>Latencia (ms)</th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- ESCALABILIDAD -->
+  <section class="win" data-win="scale" aria-labelledby="t-scale" hidden>
+    <div class="titlebar"><span class="title" id="t-scale">ESCALABILIDAD.EXE</span><span class="tb-btns"><button class="tb min" aria-label="Minimizar">_</button><button class="tb close" aria-label="Cerrar">×</button></span></div>
+    <div class="win-body">
+      <div class="crt"><canvas id="scaleChart" class="chart" width="1120" height="600" role="img" aria-label="Tiempo de consulta según tamaño del dataset"></canvas></div>
+      <div class="legend"><span class="sw sw-lin"></span>Lineal <span class="sw sw-ivf"></span>IVFFlat <span class="sw sw-hnsw"></span>HNSW <span class="muted">· parámetro más barato con recall@10 ≥ 0.95</span></div>
+      <table class="tbl" id="scaleTbl"><thead><tr><th>N</th><th>Lineal</th><th>IVFFlat</th><th>HNSW</th></tr></thead><tbody></tbody></table>
+    </div>
+  </section>
+
+  <!-- CÓMO FUNCIONA -->
+  <section class="win wide" data-win="howto" aria-labelledby="t-howto" hidden>
+    <div class="titlebar"><span class="title" id="t-howto">COMO_FUNCIONA.TXT</span><span class="tb-btns"><button class="tb min" aria-label="Minimizar">_</button><button class="tb close" aria-label="Cerrar">×</button></span></div>
+    <div class="menubar"><button class="tab active" data-tab="ivf">IVFFlat</button><button class="tab" data-tab="hnsw">HNSW</button></div>
+    <div class="win-body">
+      <div class="tabpane" data-pane="ivf">
+        <p>k-means parte el espacio en <b>listas</b> (colores). La consulta ★ solo revisa las <b>probes</b> listas con centroide más cercano. Si un vecino real cae al otro lado de una frontera, <b>se pierde</b>. <span class="muted">Haz clic en el lienzo para mover ★.</span></p>
+        <canvas id="ivfCanvas" class="demo" width="480" height="300"></canvas>
+        <div class="param-row"><label for="ivfProbes">probes</label><input type="range" id="ivfProbes" min="1" max="6" value="1"><output id="ivfProbesOut" class="chip">1</output><span class="chip" id="ivfRecall"></span></div>
+      </div>
+      <div class="tabpane" data-pane="hnsw" hidden>
+        <p>Un grafo por <b>capas</b>: arriba pocos nodos y saltos largos; abajo todos. La búsqueda es <b>voraz</b>: salta al vecino más cercano a ★ hasta no mejorar, y baja de capa. <span class="muted">Haz clic en el lienzo para mover ★.</span></p>
+        <canvas id="hnswCanvas" class="demo" width="480" height="300"></canvas>
+        <div class="param-row"><button class="btn" id="hnswRun">▶ Buscar</button><button class="btn" id="hnswNew">↻ Nuevo grafo</button><span class="chip" id="hnswInfo"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOBLE FAMOSO -->
+  <section class="win" data-win="twin" aria-labelledby="t-twin" hidden>
+    <div class="titlebar warn"><span class="title" id="t-twin">WARNING</span><span class="tb-btns"><button class="tb close" aria-label="Cerrar">×</button></span></div>
+    <div class="win-body">
+      <p class="twin-q">¿Quién se parece más a mí? <span class="muted">(tu foto no se publica: es un dato biométrico)</span></p>
+      <ol class="twin-list" id="twinList" role="listbox" aria-label="Personas más parecidas"></ol>
+      <p class="twin-verdict" id="twinVerdict"></p>
+      <p class="hint">El número es una <b>distancia</b>: mientras más baja, más parecidos (0 sería la misma foto). La línea marca <b>0.6</b>, el umbral de <code>face_recognition</code>: por debajo lo considera "la misma persona". <b>Haz clic en un famoso</b> para ver qué zonas pesan en el parecido.</p>
+
+      <div class="occ" id="occ" hidden>
+        <div class="occ-head">ANALISIS POR OCLUSION</div>
+        <div class="occ-main">
+          <div class="occ-faces">
+            <figure><div class="you-ph" role="img" aria-label="Tu foto (no se publica)"></div><figcaption>TÚ</figcaption></figure>
+            <span class="vs">VS</span>
+            <figure><div class="occ-photo" id="occPhoto"></div><figcaption id="occName"></figcaption></figure>
+          </div>
+          <div class="occ-bars" id="occBars"></div>
+        </div>
+        <p class="hint" id="occHint"></p>
+        <details class="occ-how">
+          <summary>¿Cómo se calcula?</summary>
+          <p>Se tapa una zona con gris (usando los puntos de referencia de <code>face_recognition</code>), se recalcula el embedding y se mide cuánto cambia la distancia. Se tapa <b>una foto a la vez</b> y se promedian los dos cambios, para que el parche gris no acerque artificialmente las caras.</p>
+          <p><b class="pos-t">▲ sube</b>: sin esa zona se alejan, así que la zona <b>los hacía parecidos</b>. <b class="neg-t">▼ baja</b>: la zona <b>los diferenciaba</b>.</p>
+          <p class="muted">Ojo: muestra qué zonas <i>usa el modelo</i> para decidir. Las 128 dimensiones del vector no corresponden una a una a "ojos" o "cabello": esa información está repartida en todo el vector. Técnica: <i>occlusion sensitivity</i> (Zeiler &amp; Fergus, 2014).</p>
+        </details>
+      </div>
+      <div class="dlg-btns"><button class="btn close-btn">OK</button></div>
+    </div>
+  </section>
+
+  <!-- CÁMARA EN VIVO -->
+  <section class="win" data-win="cam" aria-labelledby="t-cam" hidden>
+    <div class="titlebar"><span class="title" id="t-cam">CAMARA_EN_VIVO.EXE</span><span class="tb-btns"><button class="tb min" aria-label="Minimizar">_</button><button class="tb close" aria-label="Cerrar">×</button></span></div>
+    <div class="win-body">
+      <div class="cam-off" id="camOffline" hidden>
+        <p><b>Falta prender el servidor local</b>, porque la búsqueda de cada cara se hace en tu PostgreSQL con pgvector.</p>
+        <p>Haz <b>doble clic en <code>Abrir_FaceSearch.command</code></b> (en la carpeta del lab), o en la terminal:</p>
+        <pre class="cam-cmd">conda activate vision
+python servidor_en_vivo.py</pre>
+        <p class="hint">Después vuelve a abrir esta ventana. Tus cuadros se procesan en memoria y no se guardan.</p>
+        <div class="toolbar"><a class="btn" href="http://localhost:8000/#start=cam&amp;cam=on">▶ Abrir la página con cámara</a><button class="btn" id="camRetry">↻ Reintentar</button></div>
+      </div>
+      <div id="camOnline" hidden>
+        <div class="toolbar cam-bar">
+          <button class="btn" id="camToggle">▶ Encender cámara</button>
+          <button class="btn cam-shot" id="camShot" disabled><span class="ico ico-camera" style="width:16px;height:16px"></span> Tomar foto</button>
+          <button class="btn" id="camPause" disabled>⏸ Pausar</button>
+          <span class="hint" id="camStatus">Cámara apagada</span>
+        </div>
+        <div id="camLive" class="cam-live">
+        <div class="cam-stage">
+          <canvas id="camCanvas" width="640" height="480" aria-label="Video de la cámara con las caras detectadas"></canvas>
+          <div class="cam-flash" id="camFlash"></div>
+        </div>
+        <div class="cam-metrics" id="camMetrics" aria-live="off"></div>
+        <canvas class="cam-spark" id="camSpark" width="600" height="56" aria-label="Historial de latencia"></canvas>
+        <ol class="cam-faces" id="camFaces"></ol>
+        </div>
+        <div class="cam-paused" id="camPaused" hidden></div>
+        <div class="cam-photos-wrap" id="camPhotosWrap" hidden>
+          <div class="cam-photos-head">FOTOS <span class="hint">(clic para descargar, solo quedan en tu navegador)</span></div>
+          <div class="cam-photos" id="camPhotos"></div>
+        </div>
+      </div>
+      <video id="camVideo" playsinline muted hidden></video>
+    </div>
+  </section>
+
+  <!-- SUBIR FOTO -->
+  <section class="win" data-win="upload" aria-labelledby="t-upload" hidden>
+    <div class="titlebar warn"><span class="title" id="t-upload">SUBIR_FOTO.EXE</span><span class="tb-btns"><button class="tb min" aria-label="Minimizar">_</button><button class="tb close" aria-label="Cerrar">×</button></span></div>
+    <div class="win-body">
+      <div class="cam-off" id="upOffline" hidden>
+        <p><b>Falta prender el servidor local</b>, porque la búsqueda se hace en tu PostgreSQL con pgvector.</p>
+        <p>Haz <b>doble clic en <code>Abrir_FaceSearch.command</code></b> (en la carpeta del lab) y abre la página desde <code>http://localhost:8000</code>.</p>
+        <div class="toolbar"><a class="btn" href="http://localhost:8000/#start=upload">▶ Abrir la página con el servidor</a><button class="btn" id="upRetry">↻ Reintentar</button></div>
+      </div>
+      <div id="upOnline" class="up-online" hidden>
+        <p class="twin-q">¿A qué famoso se parece? <span class="muted">(la foto se procesa en tu servidor local y no se guarda)</span></p>
+        <label class="up-drop" id="upDrop">
+          <input type="file" id="upFile" accept="image/*">
+          <span class="ico ico-upload"></span>
+          <span><b>Arrastra una foto aquí</b> o haz clic para elegirla</span>
+        </label>
+        <div class="up-result" id="upResult" hidden>
+          <div class="up-photo"><canvas id="upCanvas" width="640" height="480" aria-label="Foto subida con las caras detectadas"></canvas></div>
+          <fieldset class="seg up-faces" id="upFaces"><legend class="sr">Cara</legend></fieldset>
+          <p class="twin-verdict" id="upVerdict"></p>
+          <ol class="twin-list" id="upList" aria-label="Personas más parecidas"></ol>
+          <p class="hint">El número es una <b>distancia</b>: mientras más baja, más parecidos (0 sería la misma foto). La línea marca <b>0.6</b>, el umbral de <code>face_recognition</code>: por debajo lo considera "la misma persona"</p>
+          <p class="hint" id="upInfo"></p>
+        </div>
+        <p class="hint" id="upStatus"></p>
+      </div>
+      <div class="dlg-btns"><button class="btn close-btn">OK</button></div>
+    </div>
+  </section>
+
+  <!-- LEEME -->
+  <section class="win" data-win="readme" aria-labelledby="t-readme" hidden>
+    <div class="titlebar"><span class="title" id="t-readme">LEEME.TXT - Bloc de notas</span><span class="tb-btns"><button class="tb min" aria-label="Minimizar">_</button><button class="tb close" aria-label="Cerrar">×</button></span></div>
+    <div class="win-body notepad" id="readmeBody"></div>
+  </section>
+
+  <!-- Barra de tareas -->
+  <footer class="taskbar">
+    <button class="start" id="startMenuBtn" aria-haspopup="true" aria-expanded="false"><span class="ico-mini heart"></span>Inicio</button>
+    <div class="tasks" id="tasks"></div>
+    <div class="tray"><span class="example-flag" id="exampleFlag" hidden>DATOS DE EJEMPLO</span><time id="clock"></time></div>
+  </footer>
+  <div class="startmenu" id="startMenu" hidden>
+    <div class="sm-side">LAB 11</div>
+    <ul></ul>
+  </div>
+</main>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

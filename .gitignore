@@ -1,0 +1,11 @@
+# Datos biométricos y derivados: nunca subir
+mi_foto*
+*.pkl
+*.npy
+*.npz
+# Dataset LFW (170 MB)
+data/
+# Sistema / editores
+.DS_Store
+.ipynb_checkpoints/
+__pycache__/
